@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SendMessage;
+use App\CardPr\Business\Letter;
+use App\CardPr\Table\Message;
+use App\CardPr\Table\Obtain;
+use App\Jobs\StoreLetter;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class MessagingController extends Controller
 {
@@ -14,7 +18,7 @@ class MessagingController extends Controller
      */
     public function index()
     {
-        //
+        return view('messaging.index');
     }
 
     /**
@@ -24,7 +28,7 @@ class MessagingController extends Controller
      */
     public function create()
     {
-        //
+        return view('messaging.create');
     }
 
     /**
@@ -35,18 +39,20 @@ class MessagingController extends Controller
      */
     public function store(Request $request)
     {
-        $jsonData = $request->json();
+        $messageData = json_decode($request->message, true);
 
-        $data = json_decode($jsonData);
-        $message = $data['message'];
+        $content = $messageData['content'];
+        $author = $messageData['author'];
 
-        $job = new SendMessage($message);
+        $letter = new Letter($content, $author);
 
+        $job = new StoreLetter($letter);
         dispatch($job);
 
-        dd('stored');
-    }
+        $response = (new Response())->setStatusCode(200);
 
+        return $response;
+    }
     /**
      * Display the specified resource.
      *
@@ -55,40 +61,21 @@ class MessagingController extends Controller
      */
     public function show($id)
     {
-        dd('let seeing');
-    }
+        $time = time();
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function edit($id)
-    {
-        //
-    }
+        $obtain = intval(Obtain::all('obtain_at')->first()->obtain_at);
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
-    {
-        //
-    }
+        Obtain::query()->update(array('obtain_at' => $time));
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy($id)
-    {
-        //
+        $messageList = Message::query()
+            ->where('created_at', '>', '?')
+            ->orderByDesc('created_at')
+            ->setBindings([$obtain])
+            ->get(['content', 'author', 'created_at'])->toArray();
+
+        $body = json_encode($messageList);
+
+        $response = (new Response())->setStatusCode(200)->setContent($body);
+        return $response;
     }
 }
